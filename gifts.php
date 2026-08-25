@@ -1,0 +1,7 @@
+<?php
+require_once __DIR__.'/config.php'; require_once __DIR__.'/includes/economy.php';
+$me=require_login(); $users=data_load('users.json'); $target=(int)($_GET['to']??$_POST['to']??0); $recipient=null; foreach($users as $u)if((int)$u['id']===$target){$recipient=$u;break;}
+if($_SERVER['REQUEST_METHOD']==='POST'){check_csrf(); if(!$recipient)exit('Пользователь не найден.'); if(!rate_limit('gift',10,1))exit('Подождите перед следующим подарком.'); if(!give_gift($me['id'],$target,(int)$_POST['gift_id']))exit('Недостаточно Гриферок или подарок недоступен.'); header('Location: gifts.php?to='.$target.'&sent=1');exit;}
+include __DIR__.'/includes/header.php'; ?>
+<section class="card"><h1>🎁 Подарки</h1><?php if($recipient): ?><p>Подарок для <b><?=e($recipient['username'])?></b>. Баланс: 🪙 <?=wallet($me)?></p><?php if(isset($_GET['sent'])):?><div class="notice">Подарок отправлен!</div><?php endif; ?><div class="gift-grid"><?php foreach(gifts() as $g): if(empty($g['enabled']))continue; ?><form method="post" class="card"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="to" value="<?=$target?>"><input type="hidden" name="gift_id" value="<?=$g['id']?>"><div style="font-size:42px"><?=$g['emoji']?></div><b><?=e($g['name'])?></b><div>🪙 <?=$g['price']?></div><button class="btn" type="submit">Подарить</button></form><?php endforeach;?></div><?php else: ?><p>Откройте профиль пользователя и выберите «Подарить».</p><?php endif;?></section>
+<?php include __DIR__.'/includes/footer.php'; ?>
