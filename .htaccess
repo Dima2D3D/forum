@@ -1,6 +1,2 @@
 DirectoryIndex index.php
-
-# Protect private files when Apache allows .htaccess rules.
-<FilesMatch "^(config\.php|.*\.json|.*\.log)$">
-    Require all denied
-</FilesMatch>
+Options -Indexes
