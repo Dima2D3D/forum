@@ -1,0 +1,10 @@
+<?php
+require __DIR__.'/config.php';
+if(!isset($_GET['code'],$_GET['state'])||!hash_equals($_SESSION['google_state']??'',$_GET['state'])){http_response_code(400);exit('Некорректный OAuth state.');}
+if(GOOGLE_CLIENT_ID===''){http_response_code(503);exit('Google OAuth не настроен.');}
+$ch=curl_init('https://oauth2.googleapis.com/token');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>http_build_query(['code'=>$_GET['code'],'client_id'=>GOOGLE_CLIENT_ID,'client_secret'=>GOOGLE_CLIENT_SECRET,'redirect_uri'=>GOOGLE_REDIRECT_URI,'grant_type'=>'authorization_code']),CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/x-www-form-urlencoded']]);$raw=curl_exec($ch);curl_close($ch);$token=json_decode($raw,true);if(empty($token['access_token']))exit('Не удалось получить токен Google.');
+$ch=curl_init('https://openidconnect.googleapis.com/v1/userinfo');curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HTTPHEADER=>['Authorization: Bearer '.$token['access_token']]]);$raw=curl_exec($ch);curl_close($ch);$info=json_decode($raw,true);if(empty($info['sub'])||empty($info['email']))exit('Google не вернул необходимые данные.');
+$pdo=db();$st=$pdo->prepare('SELECT * FROM users WHERE google_id=? OR email=? LIMIT 1');$st->execute([$info['sub'],strtolower($info['email'])]);$u=$st->fetch();
+if($u){$pdo->prepare('UPDATE users SET google_id=?,email_verified=1 WHERE id=?')->execute([$info['sub'],$u['id']]);$_SESSION['user_id']=$u['id'];header('Location: /');exit;}
+$base=preg_replace('/[^A-Za-z0-9_-]/','',explode('@',$info['email'])[0]);$base=substr($base,0,20)?:'google_user';$username=$base;$i=1;while(true){$q=$pdo->prepare('SELECT id FROM users WHERE username=?');$q->execute([$username]);if(!$q->fetch())break;$username=$base.$i++;}
+$pdo->prepare('INSERT INTO users(username,email,google_id,email_verified,created_at)VALUES(?,?,?,?,?)')->execute([$username,strtolower($info['email']),$info['sub'],1,time()]);$_SESSION['user_id']=$pdo->lastInsertId();header('Location: /');
