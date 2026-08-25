@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /google-callback.php
+Disallow: /google-login.php
+Disallow: /verify.php
+Disallow: /banned.php
+
+Sitemap: https://forum.greffrlend.fun/sitemap.php
