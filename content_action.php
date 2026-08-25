@@ -1,11 +1,104 @@
 <?php
-require_once __DIR__.'/config.php';
-$u=require_login();if($_SERVER['REQUEST_METHOD']!=='POST')redirect('index.php');check_csrf();
-$type=$_POST['type']??'';$action=$_POST['action']??'';$id=(int)($_POST['id']??0);
-$threads=data_load('threads.json');$replies=[];$found=null;
-if($type==='thread'){foreach($threads as &$t)if((int)$t['id']===$id){$found=&$t;break;}unset($t);if(!$found)exit('Не найдено');$allowed=is_owner($u)||((int)($found['author_id']??0)===(int)$u['id']);if(!$allowed)exit('Нет прав.');if($action==='pin'){require_owner($u);$found['pinned']=!empty($found['pinned'])?false:true;data_save('threads.json',$threads);log_action($found['pinned']?'Закрепление темы':'Открепление темы',(string)$id);}
-elseif($action==='delete'){if(!is_owner($u)&&(int)($found['author_id']??0)!==(int)$u['id'])exit('Нет прав.');$threads=array_values(array_filter($threads,fn($t)=>(int)$t['id']!==$id));data_save('threads.json',$threads);log_action('Удаление темы',(string)$id);redirect('index.php');}
-elseif($action==='edit'){if(!is_owner($u)&&(int)($found['author_id']??0)!==(int)$u['id'])exit('Нет прав.');$found['title']=clean_text($_POST['title']??$found['title'],120);$found['content']=clean_text($_POST['content']??$found['content'],20000);$found['updated_at']=date('c');data_save('threads.json',$threads);log_action('Изменение темы',(string)$id);}
-redirect('thread.php?id='.$id);}
-if($type==='reply'){ $file='replies_'.$id.'.json';$replies=data_load($file);$rid=(int)($_POST['reply_id']??0);$idx=null;foreach($replies as $k=>$r)if((int)($r['id']??0)===$rid){$idx=$k;$found=$r;break;}if($idx===null)exit('Не найдено');if(!is_owner($u)&&(int)($found['author_id']??0)!==(int)$u['id'])exit('Нет прав.');if($action==='delete'){array_splice($replies,$idx,1);data_save($file,$replies);log_action('Удаление ответа',(string)$rid);}elseif($action==='edit'){$replies[$idx]['message']=clean_text($_POST['message']??$found['message'],20000);$replies[$idx]['updated_at']=date('c');data_save($file,$replies);log_action('Изменение ответа',(string)$rid);}redirect('thread.php?id='.$id);}
+require_once __DIR__ . '/config.php';
+
+$u = require_login();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: index.php');
+    exit;
+}
+check_csrf();
+
+$type = $_POST['type'] ?? '';
+$action = $_POST['action'] ?? '';
+$id = (int)($_POST['id'] ?? 0);
+
+if ($type === 'thread') {
+    $threads = data_load('threads.json');
+    $index = null;
+    foreach ($threads as $key => $thread) {
+        if ((int)($thread['id'] ?? 0) === $id) {
+            $index = $key;
+            break;
+        }
+    }
+    if ($index === null) {
+        http_response_code(404);
+        exit('Пост не найден.');
+    }
+
+    // Темы/посты форума: создавать может участник, но менять описание,
+    // закреплять и удалять может только владелец форума.
+    if (!is_owner($u)) {
+        http_response_code(403);
+        exit('Только владелец форума может управлять этим постом.');
+    }
+
+    if ($action === 'pin') {
+        $threads[$index]['pinned'] = empty($threads[$index]['pinned']);
+        data_save('threads.json', $threads);
+        log_action($threads[$index]['pinned'] ? 'Закрепление поста' : 'Открепление поста', (string)$id);
+        header('Location: thread.php?id=' . $id);
+        exit;
+    }
+
+    if ($action === 'delete') {
+        array_splice($threads, $index, 1);
+        data_save('threads.json', $threads);
+        log_action('Удаление поста', (string)$id);
+        header('Location: index.php');
+        exit;
+    }
+
+    if ($action === 'edit') {
+        $threads[$index]['title'] = clean_text($_POST['title'] ?? $threads[$index]['title'], 120);
+        $threads[$index]['content'] = clean_text($_POST['content'] ?? $threads[$index]['content'], 20000);
+        $threads[$index]['updated_at'] = date('c');
+        data_save('threads.json', $threads);
+        log_action('Изменение поста', (string)$id);
+        header('Location: thread.php?id=' . $id);
+        exit;
+    }
+}
+
+if ($type === 'reply') {
+    $threadId = (int)($_POST['thread_id'] ?? $id);
+    $replyId = (int)($_POST['reply_id'] ?? 0);
+    $file = 'replies_' . $threadId . '.json';
+    $replies = data_load($file);
+    $index = null;
+
+    foreach ($replies as $key => $reply) {
+        if ((int)($reply['id'] ?? 0) === $replyId) {
+            $index = $key;
+            break;
+        }
+    }
+    if ($index === null) {
+        http_response_code(404);
+        exit('Комментарий не найден.');
+    }
+
+    // Свой комментарий можно изменять/удалять. Владелец форума может модерировать любой.
+    $own = (int)($replies[$index]['author_id'] ?? 0) === (int)$u['id'];
+    if (!$own && !is_owner($u)) {
+        http_response_code(403);
+        exit('Нет прав.');
+    }
+
+    if ($action === 'delete') {
+        array_splice($replies, $index, 1);
+        data_save($file, $replies);
+        log_action('Удаление комментария', (string)$replyId);
+    } elseif ($action === 'edit') {
+        $replies[$index]['message'] = clean_text($_POST['message'] ?? $replies[$index]['message'], 20000);
+        $replies[$index]['updated_at'] = date('c');
+        data_save($file, $replies);
+        log_action('Изменение комментария', (string)$replyId);
+    }
+
+    header('Location: thread.php?id=' . $threadId . '#reply-' . $replyId);
+    exit;
+}
+
+http_response_code(400);
 exit('Неизвестное действие.');
