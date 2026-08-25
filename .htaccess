@@ -1,0 +1,7 @@
+Options -Indexes
+<FilesMatch "\.(json|log)$">
+  Require all denied
+</FilesMatch>
+<Files "config.php">
+  Require all denied
+</Files>
