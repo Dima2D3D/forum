@@ -1,0 +1,122 @@
+<?php
+// GREFFRLEND Forum — базовая конфигурация
+session_start();
+
+const SITE_NAME = 'GREFFRLEND';
+const SITE_URL = 'https://forum.greffrlend.fun';
+const MAIL_FROM = 'admins@greffrlend.fun';
+const DB_FILE = __DIR__ . '/forum.sqlite';
+
+// Для Google OAuth заполните эти значения в production.
+const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_SECRET = '';
+const GOOGLE_REDIRECT_URI = SITE_URL . '/google-callback.php';
+
+if (!isset($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+function db(): PDO {
+    static $pdo = null;
+    if ($pdo === null) {
+        $pdo = new PDO('sqlite:' . DB_FILE, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $pdo->exec('PRAGMA foreign_keys = ON');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT,
+            google_id TEXT UNIQUE,
+            email_verified INTEGER NOT NULL DEFAULT 0,
+            role TEXT NOT NULL DEFAULT 'user',
+            banned_until INTEGER,
+            ban_reason TEXT,
+            ban_ip INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        )");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS threads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            pinned INTEGER NOT NULL DEFAULT 0,
+            locked INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS email_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS moderation_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            moderator_id INTEGER NOT NULL,
+            target_user_id INTEGER,
+            action TEXT NOT NULL,
+            reason TEXT,
+            until_at INTEGER,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(moderator_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE SET NULL
+        )");
+    }
+    return $pdo;
+}
+
+db();
+
+function e(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e($_SESSION['csrf']) . '">'; }
+function csrf_ok(): bool { return isset($_POST['csrf']) && hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf']); }
+function user(): ?array {
+    if (empty($_SESSION['user_id'])) return null;
+    $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
+    $stmt->execute([$_SESSION['user_id']]);
+    return $stmt->fetch() ?: null;
+}
+function is_banned(?array $u): bool {
+    if (!$u) return false;
+    if (!empty($u['banned_until']) && $u['banned_until'] <= time()) {
+        db()->prepare('UPDATE users SET banned_until=NULL, ban_reason=NULL, ban_ip=0 WHERE id=?')->execute([$u['id']]);
+        return false;
+    }
+    return !empty($u['banned_until']);
+}
+function require_login(): array {
+    $u = user();
+    if (!$u) { header('Location: /?page=login'); exit; }
+    if (is_banned($u)) { header('Location: /banned.php'); exit; }
+    return $u;
+}
+function require_verified(array $u): void {
+    if (!$u['email_verified']) { header('Location: /?page=verify-needed'); exit; }
+}
+function can_moderate(?array $u): bool { return $u && in_array($u['role'], ['moderator','admin'], true); }
+function can_admin(?array $u): bool { return $u && $u['role'] === 'admin'; }
+function page_url(string $page): string { return $page === 'home' ? '/' : '/?page=' . rawurlencode($page); }
+function send_verify_email(array $u): bool {
+    $raw = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $raw);
+    db()->prepare('DELETE FROM email_tokens WHERE user_id=?')->execute([$u['id']]);
+    db()->prepare('INSERT INTO email_tokens(user_id,token_hash,expires_at) VALUES(?,?,?)')->execute([$u['id'],$hash,time()+86400]);
+    $url = SITE_URL . '/verify.php?token=' . urlencode($raw);
+    $subject = 'Подтверждение E-mail — GREFFRLEND';
+    $message = "Здравствуйте, {$u['username']}!\n\nПодтвердите E-mail: {$url}\n\nСсылка действует 24 часа.\n\nGREFFRLEND Forum";
+    $headers = 'From: ' . MAIL_FROM . "\r\n" . 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
+    return @mail($u['email'], '=?UTF-8?B?' . base64_encode($subject) . '?=', $message, $headers);
+}
