@@ -3,13 +3,13 @@
 <footer class="site-footer">
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="banners/IMG_20260727_215431_065.jpg" alt="GREFFRLEND" class="site-icon">
+      <img src="/banners/IMG_20260727_215431_065.jpg" alt="GREFFRLEND" class="site-icon">
       <div><strong>GREFFRLEND</strong><span>Minecraft Community</span></div>
     </div>
     <nav class="footer-links">
-      <a href="rules.php">Правила сообщества</a>
-      <a href="offer.php">Оферта</a>
-      <a href="privacy.php">Конфиденциальность</a>
+      <a href="/rules.php">Правила сообщества</a>
+      <a href="/offer.php">Оферта</a>
+      <a href="/privacy.php">Конфиденциальность</a>
       <a href="mailto:admins@greffrlend.fun">Контакты</a>
     </nav>
   </div>
