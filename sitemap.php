@@ -1,0 +1,4 @@
+<?php
+require __DIR__.'/config.php';
+header('Content-Type: application/xml; charset=UTF-8');
+$pdo=db();$threads=$pdo->query('SELECT id,created_at FROM threads ORDER BY id DESC')->fetchAll();echo '<?xml version="1.0" encoding="UTF-8"?>';?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc><?=e(SITE_URL.'/')?></loc><changefreq>daily</changefreq><priority>1.0</priority></url><url><loc><?=e(SITE_URL.'/?page=rules')?></loc><priority>0.5</priority></url><url><loc><?=e(SITE_URL.'/?page=offer')?></loc><priority>0.4</priority></url><?php foreach($threads as $t):?><url><loc><?=e(SITE_URL.'/?page=thread&amp;id='.$t['id'])?></loc><lastmod><?=date('c',$t['created_at'])?></lastmod><priority>0.8</priority></url><?php endforeach;?></urlset>
