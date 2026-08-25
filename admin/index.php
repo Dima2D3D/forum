@@ -1,95 +1,14 @@
 <?php
 require_once __DIR__.'/../config.php';
 $me=require_admin();
-$users=data_load('users.json');
-$logs=array_reverse(data_load('logs.json'));
-$threads=data_load('threads.json');
-$reports=data_load('reports.json');
-
-if($_SERVER['REQUEST_METHOD']==='POST'){
-    check_csrf();
-    $id=(int)($_POST['user_id']??0);
-    $action=$_POST['mod_action']??'ban_both';
-    $reason=clean_text($_POST['reason']??'Нарушение правил',300);
-    $days=(int)($_POST['days']??7);
-    $users=data_load('users.json');
-    foreach($users as &$target){
-        if((int)($target['id']??0)!==$id) continue;
-        if(($target['role']??'')==='owner') break;
-        $until=$days===0?'permanent':date('c',time()+$days*86400);
-        if($action==='unban'){
-            $target['ban']=null;$target['banned_until']=null;$target['ban_reason']='';
-            log_action('Снятие бана',$target['username'],$reason);
-        }else{
-            if(in_array($action,['ban','ban_both'],true)){
-                $target['ban']=['active'=>true,'until'=>$until,'reason'=>$reason];
-                $target['banned_until']=$until;$target['ban_reason']=$reason;
-            }
-            if(in_array($action,['ban_ip','ban_both'],true) && !empty($target['ip'])){
-                $bans=data_load('bans.json');
-                $bans[]=['id'=>next_id($bans),'type'=>'ip','value'=>$target['ip'],'until'=>$until,'reason'=>$reason,'user_id'=>$id];
-                data_save('bans.json',$bans);
-            }
-            log_action($action,$target['username'],$reason);
-        }
-        break;
-    }
-    unset($target);
-    data_save('users.json',$users);
-    header('Location:index.php');exit;
-}
-
-$title='Админ-панель — GREFFRLEND';
-include __DIR__.'/../includes/header.php';
-?>
-<section class="card">
-    <div class="category">CONTROL CENTER</div>
-    <h1>👑 Админ-панель</h1>
-    <p class="muted">Владелец имеет полный доступ. Критические действия защищены ролью owner.</p>
-</section>
-<div class="admin-grid">
-    <div class="card"><div class="category">ПОЛЬЗОВАТЕЛИ</div><div class="stat"><?=count($users)?></div></div>
-    <div class="card"><div class="category">ПОСТЫ</div><div class="stat"><?=count($threads)?></div></div>
-    <div class="card"><div class="category">ЖАЛОБЫ</div><div class="stat"><?=count($reports)?></div></div>
-    <div class="card"><div class="category">ЖУРНАЛ</div><div class="stat"><?=count($logs)?></div></div>
-</div>
-<?php if(is_owner($me)): ?>
-<section class="card">
-    <h2>👑 Инструменты владельца</h2>
-    <div class="button-row">
-        <a class="btn" href="banner.php">📢 Реклама</a>
-        <a class="btn" href="recommendations.php">⭐ Рекомендации</a>
-        <a class="btn" href="economy.php">🪙 Гриферки</a>
-        <a class="btn" href="subscriptions.php">⭐ Premium</a>
-        <a class="btn" href="gifts.php">🎁 Подарки</a>
-        <a class="btn" href="users.php">👥 Пользователи</a>
-        <a class="btn" href="logs.php">📜 Журнал</a>
-    </div>
-</section>
-<?php endif; ?>
-<h2>Модерация пользователей</h2>
-<?php foreach($users as $u): ?>
-<div class="card thread">
-    <div>
-        <b><?=e($u['username']??'Пользователь')?></b>
-        <div class="muted"><?=e($u['email']??'')?> · <?=e($u['role']??'user')?> · IP <?=e($u['ip']??'не сохранён')?></div>
-    </div>
-    <?php if(($u['role']??'')!=='owner'): ?>
-    <details><summary class="btn small">Наказать</summary>
-        <form method="post" class="form">
-            <input type="hidden" name="csrf" value="<?=e(csrf())?>">
-            <input type="hidden" name="user_id" value="<?=$u['id']?>">
-            <select name="mod_action"><option value="ban_both">Бан + IP</option><option value="ban">Бан аккаунта</option><option value="ban_ip">IP-бан</option><option value="unban">Снять бан</option></select>
-            <select name="days"><option value="1">1 день</option><option value="3">3 дня</option><option value="7" selected>7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option><option value="0">Навсегда</option></select>
-            <input name="reason" placeholder="Причина" required>
-            <button class="btn">Применить</button>
-        </form>
-    </details>
-    <?php else: ?><span class="pin">👑 OWNER</span><?php endif; ?>
-</div>
-<?php endforeach; ?>
-<h2>Последние действия</h2>
-<?php foreach(array_slice($logs,0,20) as $log): ?>
-<div class="card"><b><?=e($log['action']??'')?></b> — <?=e($log['target']??'')?> <span class="muted">· <?=e($log['time']??'')?></span></div>
-<?php endforeach; ?>
-<?php include __DIR__.'/../includes/footer.php'; ?>
+$users=data_load('users.json'); $logs=array_reverse(data_load('logs.json')); $threads=data_load('threads.json'); $reports=data_load('reports.json');
+if($_SERVER['REQUEST_METHOD']==='POST'){check_csrf();$id=(int)($_POST['user_id']??0);$action=$_POST['mod_action']??'ban_both';$reason=clean_text($_POST['reason']??'Нарушение правил',300);$days=(int)($_POST['days']??7);foreach($users as &$target){if((int)($target['id']??0)!==$id)continue;if(($target['role']??'')==='owner')break;$until=$days===0?'permanent':date('c',time()+$days*86400);if($action==='unban'){$target['ban']=null;$target['banned_until']=null;$target['ban_reason']='';log_action('Снятие бана',$target['username'],$reason);}else{if(in_array($action,['ban','ban_both'],true)){$target['ban']=['active'=>true,'until'=>$until,'reason'=>$reason];$target['banned_until']=$until;$target['ban_reason']=$reason;}if(in_array($action,['ban_ip','ban_both'],true)&&!empty($target['ip'])){$bans=data_load('bans.json');$bans[]=['id'=>next_id($bans),'type'=>'ip','value'=>$target['ip'],'until'=>$until,'reason'=>$reason,'user_id'=>$id];data_save('bans.json',$bans);}log_action($action,$target['username'],$reason);}break;}unset($target);data_save('users.json',$users);header('Location: index.php');exit;}
+$title='Админ-панель — GREFFRLEND'; include __DIR__.'/../includes/header.php'; ?>
+<style>
+body.admin-page{background:#070707!important;color:#eee!important;font-family:Arial,Helvetica,sans-serif!important}body.admin-page .site-header{background:#0b0b0b!important;border-bottom:1px solid #292929!important}body.admin-page .page{max-width:1180px!important;margin:auto!important;padding:30px 18px!important}body.admin-page .card{background:linear-gradient(145deg,#17120f,#0e0e0e)!important;border:1px solid #34261f!important;border-radius:16px!important;color:#eee!important;padding:22px!important;margin:15px 0!important;box-shadow:0 14px 40px rgba(0,0,0,.35)!important}body.admin-page h1,body.admin-page h2,body.admin-page h3,body.admin-page b{color:#fff!important}body.admin-page .category{color:#ff7620!important;font-size:11px!important;font-weight:900!important;letter-spacing:2px!important;text-transform:uppercase}body.admin-page .muted{color:#909090!important}body.admin-page .stat{font-size:32px!important;font-weight:900!important;color:#ff721d!important}body.admin-page .admin-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:15px!important}body.admin-page .button-row{display:flex!important;gap:10px!important;flex-wrap:wrap!important}body.admin-page .btn,body.admin-page button{display:inline-block!important;background:linear-gradient(105deg,#ff6b10,#e62c28)!important;color:#fff!important;border:0!important;border-radius:10px!important;padding:11px 17px!important;font-weight:800!important;text-decoration:none!important;cursor:pointer!important}body.admin-page input,body.admin-page select,body.admin-page textarea{background:#090909!important;color:#eee!important;border:1px solid #39312d!important;border-radius:9px!important;padding:11px!important;outline:none!important}body.admin-page .thread{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:18px!important}body.admin-page .pin{color:#ff7620!important;font-weight:900!important}.admin-hero{background:radial-gradient(circle at 85% 20%,rgba(255,87,20,.18),transparent 35%),linear-gradient(145deg,#17110e,#0b0b0b)!important;border:1px solid #4a2a1d!important}@media(max-width:760px){body.admin-page .admin-grid{grid-template-columns:1fr 1fr!important}body.admin-page .thread{align-items:flex-start!important;flex-direction:column!important}}@media(max-width:430px){body.admin-page .admin-grid{grid-template-columns:1fr!important}}
+</style>
+<section class="card admin-hero"><div class="category">CONTROL CENTER</div><h1>👑 Админ-панель</h1><p class="muted">Владелец имеет полный доступ. Критические действия защищены ролью owner.</p></section>
+<div class="admin-grid"><div class="card"><div class="category">ПОЛЬЗОВАТЕЛИ</div><div class="stat"><?=count($users)?></div></div><div class="card"><div class="category">ПОСТЫ</div><div class="stat"><?=count($threads)?></div></div><div class="card"><div class="category">ЖАЛОБЫ</div><div class="stat"><?=count($reports)?></div></div><div class="card"><div class="category">ЖУРНАЛ</div><div class="stat"><?=count($logs)?></div></div></div>
+<?php if(is_owner($me)): ?><section class="card"><h2>👑 Инструменты владельца</h2><div class="button-row"><a class="btn" href="banner.php">📢 Реклама</a><a class="btn" href="recommendations.php">⭐ Рекомендации</a><a class="btn" href="economy.php">🪙 Гриферки</a><a class="btn" href="subscriptions.php">⭐ Premium</a><a class="btn" href="gifts.php">🎁 Подарки</a><a class="btn" href="users.php">👥 Пользователи</a><a class="btn" href="logs.php">📜 Журнал</a></div></section><?php endif; ?>
+<h2>Модерация пользователей</h2><?php foreach($users as $u): ?><div class="card thread"><div><b><?=e($u['username']??'Пользователь')?></b><div class="muted"><?=e($u['email']??'')?> · <?=e($u['role']??'user')?> · IP <?=e($u['ip']??'не сохранён')?></div></div><?php if(($u['role']??'')!=='owner'): ?><details><summary class="btn">Наказать</summary><form method="post" class="form"><input type="hidden" name="csrf" value="<?=e(csrf())?>"><input type="hidden" name="user_id" value="<?=$u['id']?>"><select name="mod_action"><option value="ban_both">Бан + IP</option><option value="ban">Бан аккаунта</option><option value="ban_ip">IP-бан</option><option value="unban">Снять бан</option></select><select name="days"><option value="1">1 день</option><option value="3">3 дня</option><option value="7" selected>7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option><option value="0">Навсегда</option></select><input name="reason" placeholder="Причина" required><button class="btn">Применить</button></form></details><?php else: ?><span class="pin">👑 OWNER</span><?php endif; ?></div><?php endforeach; ?>
+<h2>Последние действия</h2><?php foreach(array_slice($logs,0,20) as $log): ?><div class="card"><b><?=e($log['action']??'')?></b> — <?=e($log['target']??'')?> <span class="muted">· <?=e($log['time']??'')?></span></div><?php endforeach; ?><?php include __DIR__.'/../includes/footer.php'; ?>
