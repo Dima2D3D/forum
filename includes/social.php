@@ -1,0 +1,40 @@
+<?php
+require_once __DIR__.'/../config.php';
+
+function notifications_add(int $userId,string $type,string $text,string $url=''): void {
+    if($userId<=0)return;
+    $items=data_load('notifications.json');
+    $items[]=['id'=>next_id($items),'user_id'=>$userId,'type'=>$type,'text'=>clean_text($text,500),'url'=>$url,'read'=>false,'created_at'=>date('c')];
+    data_save('notifications.json',$items);
+}
+function following_ids(int $userId): array {
+    $rows=data_load('follows.json'); $out=[];
+    foreach($rows as $r) if((int)($r['follower_id']??0)===$userId)$out[]=(int)$r['following_id'];
+    return array_values(array_unique($out));
+}
+function is_following(int $from,int $to): bool {
+    foreach(data_load('follows.json') as $r) if((int)($r['follower_id']??0)===$from&&(int)($r['following_id']??0)===$to)return true;
+    return false;
+}
+function follow_user(int $from,int $to): void {
+    if($from<=0||$to<=0||$from===$to)return;
+    $rows=data_load('follows.json'); if(is_following($from,$to))return;
+    $rows[]=['id'=>next_id($rows),'follower_id'=>$from,'following_id'=>$to,'created_at'=>date('c')]; data_save('follows.json',$rows);
+    notifications_add($to,'follow','На вас подписался новый пользователь.','profile.php?id='.$from);
+}
+function unfollow_user(int $from,int $to): void {
+    $rows=data_load('follows.json'); $rows=array_values(array_filter($rows,fn($r)=>!((int)($r['follower_id']??0)===$from&&(int)($r['following_id']??0)===$to))); data_save('follows.json',$rows);
+}
+function follower_count(int $id): int { $n=0;foreach(data_load('follows.json') as $r)$n+=(int)($r['following_id']??0)===$id?1:0;return $n; }
+function following_count(int $id): int { return count(following_ids($id)); }
+function unread_notifications(int $id): int { $n=0;foreach(data_load('notifications.json') as $r)$n+=(int)($r['user_id']??0)===$id&&!$r['read']?1:0;return $n; }
+function grant_achievement(int $userId,string $code,string $name,int $reward=0): void {
+    $rows=data_load('achievements.json'); foreach($rows as $r)if((int)($r['user_id']??0)===$userId&&($r['code']??'')===$code)return;
+    $rows[]=['id'=>next_id($rows),'user_id'=>$userId,'code'=>$code,'name'=>$name,'reward'=>$reward,'created_at'=>date('c')];data_save('achievements.json',$rows);
+    if($reward>0&&function_exists('economy_add'))economy_add($userId,$reward,'achievement','Достижение: '.$name);
+    notifications_add($userId,'achievement','Получено достижение: '.$name,'achievements.php');
+}
+function user_achievements(int $id): array { return array_values(array_filter(data_load('achievements.json'),fn($r)=>(int)($r['user_id']??0)===$id)); }
+function report_content(int $userId,string $type,int $target,string $reason): void {
+    $rows=data_load('reports.json');$rows[]=['id'=>next_id($rows),'user_id'=>$userId,'type'=>$type,'target_id'=>$target,'reason'=>clean_text($reason,1000),'status'=>'new','created_at'=>date('c')];data_save('reports.json',$rows);
+}
