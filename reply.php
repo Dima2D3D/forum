@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/includes/social.php';
+require_once __DIR__ . '/includes/economy.php';
 
 $u = require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -17,6 +18,10 @@ if (!rate_limit('reply', 10, 1)) {
 $threadId = (int)($_POST['thread_id'] ?? 0);
 $message = clean_text($_POST['message'] ?? '', 20000);
 $parentId = (int)($_POST['parent_id'] ?? 0);
+$premiumStyle = (string)($_POST['premium_style'] ?? 'default');
+$allowedPremiumStyles = ['default','glow','glass','accent'];
+$premiumUser = premium($u) || is_owner($u);
+if (!$premiumUser || !in_array($premiumStyle, $allowedPremiumStyles, true)) $premiumStyle = 'default';
 
 if ($threadId < 1 || $message === '') {
     http_response_code(400);
@@ -60,6 +65,7 @@ $replies[] = [
     'message' => $message,
     'attachments' => $attachments,
     'parent_id' => $parentId,
+    'premium_style' => $premiumStyle,
     'created_at' => date('c')
 ];
 data_save('replies_' . $threadId . '.json', $replies);
