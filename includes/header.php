@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/../config.php';
 if (is_file(__DIR__ . '/social.php')) require_once __DIR__ . '/social.php';
+if (is_file(__DIR__ . '/inactivity.php')) require_once __DIR__ . '/inactivity.php';
 $me = current_user();
+run_inactivity_reminders();
 $pageTitle = isset($title) && $title !== '' ? $title : SITE_NAME;
 $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
 $adminPage = strpos($requestUri, '/admin/') !== false;
