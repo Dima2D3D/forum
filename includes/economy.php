@@ -10,37 +10,22 @@ function subscription(array $u): ?array {
     }
     return null;
 }
-
-function premium(array $u): bool {
-    return is_owner($u) || subscription($u) !== null;
-}
-
+function premium(array $u): bool { return is_owner($u) || subscription($u) !== null; }
 function wallet(array $u): int {
     foreach (data_load('wallets.json') as $w) if ((int)($w['user_id'] ?? 0) === (int)$u['id']) return max(0, (int)($w['balance'] ?? 0));
     return 0;
 }
-
 function set_wallet(int $userId, int $balance): void {
-    $items = data_load('wallets.json');
-    $found = false;
-    foreach ($items as &$w) {
-        if ((int)($w['user_id'] ?? 0) === $userId) {
-            $w['balance'] = max(0, $balance);
-            $found = true;
-            break;
-        }
-    }
+    $items = data_load('wallets.json'); $found = false;
+    foreach ($items as &$w) if ((int)($w['user_id'] ?? 0) === $userId) { $w['balance'] = max(0, $balance); $found = true; break; }
     unset($w);
     if (!$found) $items[] = ['user_id' => $userId, 'balance' => max(0, $balance)];
     data_save('wallets.json', $items);
 }
-
 function change_wallet(int $userId, int $delta, string $reason, string $actor = 'system'): bool {
-    $users = data_load('users.json');
-    $name = 'user';
+    $users = data_load('users.json'); $name = 'user';
     foreach ($users as $u) if ((int)$u['id'] === $userId) { $name = $u['username']; break; }
-    $old = wallet(['id' => $userId]);
-    $new = $old + $delta;
+    $old = wallet(['id' => $userId]); $new = $old + $delta;
     if ($new < 0) return false;
     set_wallet($userId, $new);
     $logs = data_load('economy_logs.json');
@@ -48,7 +33,6 @@ function change_wallet(int $userId, int $delta, string $reason, string $actor = 
     data_save('economy_logs.json', $logs);
     return true;
 }
-
 function gifts(): array {
     return data_load('gifts.json', [
         ['id' => 1, 'name' => 'Роза', 'emoji' => '🌹', 'price' => 50, 'enabled' => true],
@@ -58,7 +42,6 @@ function gifts(): array {
         ['id' => 5, 'name' => 'Ракета', 'emoji' => '🚀', 'price' => 2500, 'enabled' => true]
     ]);
 }
-
 function give_gift(int $from, int $to, int $giftId, string $description = ''): bool {
     foreach (gifts() as $g) {
         if ((int)$g['id'] !== $giftId || empty($g['enabled'])) continue;
@@ -67,18 +50,15 @@ function give_gift(int $from, int $to, int $giftId, string $description = ''): b
 
         $description = clean_text($description, 500);
         $logs = data_load('gift_logs.json');
-        $logs[] = [
-            'id' => next_id($logs),
-            'gift_id' => $giftId,
-            'from' => $from,
-            'to' => $to,
-            'description' => $description,
-            'time' => date('c')
-        ];
+        $logs[] = ['id' => next_id($logs), 'gift_id' => $giftId, 'from' => $from, 'to' => $to, 'description' => $description, 'time' => date('c')];
         data_save('gift_logs.json', $logs);
 
         change_wallet($to, (int)floor($g['price'] * .25), 'Получен подарок: ' . $g['name'], 'gift');
-        notifications_add($to, 'gift', 'Вам подарили ' . $g['name'] . ' от пользователя.', 'profile.php?id=' . $from);
+        $fromName = 'Пользователь';
+        foreach (data_load('users.json') as $sender) if ((int)($sender['id'] ?? 0) === $from) { $fromName = (string)$sender['username']; break; }
+        $giftText = $fromName . ' подарил(а) вам ' . $g['name'] . '.';
+        if ($description !== '') $giftText .= ' Сообщение: ' . $description;
+        notifications_add($to, 'gift', $giftText, 'profile.php?id=' . $from);
         check_achievements($to);
         return true;
     }
