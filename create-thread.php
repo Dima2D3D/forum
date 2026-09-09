@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/social.php';
 
 $u = require_login();
 $categories = data_load('categories.json');
@@ -37,7 +38,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'created_at' => date('c')
             ];
             data_save('threads.json', $threads);
-            header('Location: thread.php?id=' . $newId);
+            $url = 'thread.php?id=' . $newId;
+            notify_mentions($content, (int)$u['id'], $url);
+            check_achievements((int)$u['id']);
+            header('Location: ' . $url);
             exit;
         }
     }
