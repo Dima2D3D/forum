@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/social.php';
 
 $u = require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -15,27 +16,28 @@ if (!rate_limit('like', 2, 6)) {
 
 $type = $_POST['type'] ?? '';
 $id = (int)($_POST['id'] ?? 0);
-
 if (!in_array($type, ['thread', 'reply'], true) || $id < 1) {
     http_response_code(400);
     exit('Некорректный запрос.');
 }
 
+$targetUserId = 0;
+$redirect = 'index.php';
+
 if ($type === 'thread') {
     $threads = data_load('threads.json');
-    $exists = false;
     foreach ($threads as $thread) {
         if ((int)($thread['id'] ?? 0) === $id) {
-            $exists = true;
+            $targetUserId = (int)($thread['author_id'] ?? 0);
+            $redirect = 'thread.php?id=' . $id;
             break;
         }
     }
-    if (!$exists) {
+    if ($targetUserId <= 0) {
         http_response_code(404);
         exit('Пост не найден.');
     }
     $file = 'likes_thread_' . $id . '.json';
-    $redirect = 'thread.php?id=' . $id;
 } else {
     $replyFile = null;
     $threadId = 0;
@@ -46,11 +48,12 @@ if ($type === 'thread') {
             if ((int)($reply['id'] ?? 0) === $id) {
                 $replyFile = basename($path);
                 $threadId = (int)preg_replace('/\D/', '', str_replace(['replies_', '.json'], '', basename($path)));
+                $targetUserId = (int)($reply['author_id'] ?? 0);
                 break 2;
             }
         }
     }
-    if (!$replyFile) {
+    if (!$replyFile || $targetUserId <= 0) {
         http_response_code(404);
         exit('Комментарий не найден.');
     }
@@ -60,19 +63,22 @@ if ($type === 'thread') {
 
 $likes = data_load($file);
 $normalized = [];
-foreach ($likes as $like) {
-    $normalized[] = is_array($like) ? (int)($like['user_id'] ?? 0) : (int)$like;
-}
+foreach ($likes as $like) $normalized[] = is_array($like) ? (int)($like['user_id'] ?? 0) : (int)$like;
 $normalized = array_values(array_unique(array_filter($normalized)));
 
 $position = array_search((int)$u['id'], $normalized, true);
 if ($position === false) {
     $normalized[] = (int)$u['id'];
+    if ($targetUserId !== (int)$u['id']) {
+        $actorName = (string)($u['username'] ?? 'Пользователь');
+        notifications_add($targetUserId, 'like', $actorName . ' поставил(а) лайк на ' . ($type === 'thread' ? 'ваш пост.' : 'ваш комментарий.'), $redirect . '#post-' . $id);
+    }
 } else {
     unset($normalized[$position]);
     $normalized = array_values($normalized);
 }
 
 data_save($file, $normalized);
+check_achievements($targetUserId);
 header('Location: ' . $redirect . '#post-' . $id);
 exit;
