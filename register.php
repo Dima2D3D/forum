@@ -76,15 +76,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             data_save('users.json', $users);
 
-            $subject = 'Подтверждение E-mail - GREFFRLEND';
-            $safeName = e($name);
-            $safeLink = e($link);
-            $html = '<!doctype html><html lang="ru"><body style="font-family:Arial,sans-serif;background:#090909;color:#eee;padding:30px"><div style="max-width:600px;margin:auto;background:#111;padding:30px;border-radius:15px"><h1 style="color:#ff6b00">GREFFRLEND</h1><p>Привет, ' . $safeName . '!</p><p>Подтвердите E-mail, чтобы завершить регистрацию.</p><p><a href="' . $safeLink . '" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:bold">Подтвердить E-mail</a></p><p>Если кнопка не работает, откройте ссылку:</p><p>' . $safeLink . '</p></div></body></html>';
-            $plain = "Привет, $name!\n\nПодтвердите E-mail по ссылке:\n$link";
+            // Старый дизайн письма сохранён, меняется только транспорт:
+            // обе MIME-части кодируются base64 и разбиваются по 76 символов,
+            // чтобы Exim не отклонял письмо из-за слишком длинных строк.
+            $subject = 'Подтверждение E-mail — GREFFRLEND';
+            $html = '<!doctype html><html><body style="margin:0;background:#090909;color:#eee;font-family:Arial,sans-serif"><div style="max-width:620px;margin:30px auto;background:#111;border:1px solid #2c2c2c;border-radius:18px;overflow:hidden"><div style="padding:30px;background:linear-gradient(110deg,#111,#2a1005,#3a0808)"><div style="font-size:28px;font-weight:900;letter-spacing:4px;color:#ff6b00">GREFFRLEND</div></div><div style="padding:32px"><h1>Подтвердите E-mail</h1><p>Привет, ' . e($name) . '!</p><p>Нажмите кнопку ниже, чтобы подтвердить адрес электронной почты и завершить регистрацию.</p><p><a href="' . e($link) . '" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:700">Подтвердить E-mail</a></p><p style="color:#999;font-size:13px">Если кнопка не работает, скопируйте ссылку:<br><a href="' . e($link) . '" style="color:#ff7a2b">' . e($link) . '</a></p></div><div style="padding:18px 32px;color:#777;border-top:1px solid #222">© 2025 — 2026 GREFFRLEND</div></div></body></html>';
+            $plain = "Привет, $name!\n\nПодтвердите E-mail: $link";
             $boundary = '=_greffrlend_register_' . bin2hex(random_bytes(8));
 
-            // Кодируем обе части base64 и разбиваем на строки по 76 символов.
-            // Это устраняет ошибку Exim: "содержит слишком длинные строки".
             $body = '--' . $boundary . "\r\n"
                 . "Content-Type: text/plain; charset=UTF-8\r\n"
                 . "Content-Transfer-Encoding: base64\r\n\r\n"
