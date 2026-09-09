@@ -27,11 +27,8 @@ $canSeePhone = $me && ((int)$me['id'] === $id || ($privacy['phone'] ?? 'nobody')
 $premium = subscription($profile) !== null || is_owner($profile);
 $title = ($profile['username'] ?? 'Профиль') . ' — GREFFRLEND';
 
-/* Получаем подарки пользователя из файлового хранилища. */
 $giftMap = [];
-foreach (gifts() as $gift) {
-    $giftMap[(int)$gift['id']] = $gift;
-}
+foreach (gifts() as $gift) $giftMap[(int)$gift['id']] = $gift;
 $receivedGifts = [];
 foreach (data_load('gift_logs.json') as $giftLog) {
     if ((int)($giftLog['to'] ?? 0) !== $id) continue;
@@ -48,6 +45,7 @@ foreach (data_load('gift_logs.json') as $giftLog) {
     $receivedGifts[] = [
         'gift' => $giftMap[$giftId],
         'from' => $fromName,
+        'description' => (string)($giftLog['description'] ?? ''),
         'time' => (string)($giftLog['time'] ?? '')
     ];
 }
@@ -56,15 +54,12 @@ $receivedGifts = array_reverse($receivedGifts);
 include __DIR__ . '/includes/header.php';
 ?>
 
-<section class="profile-cover" style="background-image:url('<?=e($profile['cover'] ?? 'banners/IMG_20260727_215431_065.jpg')?>');background-size:cover;background-position:center;height:220px;max-height:32vw;border-radius:18px;border:1px solid #34251d;overflow:hidden">
+<section class="profile-cover" style="background-image:url('<?=e($profile['cover'] ?? 'banners/IMG_20260727_215431_065.jpg')?>');background-size:cover;background-position:center;height:220px;max-height:42vw;border-radius:18px;border:1px solid #34251d;overflow:hidden">
     <div style="height:100%;padding:22px;display:flex;align-items:flex-end;background:linear-gradient(180deg,transparent 25%,rgba(0,0,0,.9))">
         <div class="profile-head" style="display:flex;align-items:center;gap:16px">
             <img class="avatar" src="<?=e($profile['avatar'] ?? 'banners/IMG_20260727_215431_065.jpg')?>" alt="Аватар" style="width:82px;height:82px;max-width:82px;max-height:82px;object-fit:cover;border-radius:50%;border:3px solid #ff6817;transform:translateY(10px)">
             <div>
-                <h1 style="margin:0">
-                    <?=e($profile['username'])?>
-                    <?php if ($premium): ?><span class="premium-badge">⭐ PREMIUM</span><?php endif; ?>
-                </h1>
+                <h1 style="margin:0"><?=e($profile['username'])?><?php if ($premium): ?> <span class="premium-badge">⭐ PREMIUM</span><?php endif; ?></h1>
                 <div class="username">@<?=e((string)($profile['handle'] ?? $profile['username']))?></div>
                 <span class="pill"><?=e($profile['role'] ?? 'user')?></span>
                 <div class="muted">С нами с <?=e((string)($profile['created_at'] ?? ''))?></div>
@@ -117,11 +112,8 @@ include __DIR__ . '/includes/header.php';
 <section class="card" style="margin-top:18px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <h2 style="margin:0">🎁 Подарки</h2>
-        <?php if ($me && (int)$me['id'] !== $id): ?>
-            <a class="btn" href="gifts.php?to=<?=$id?>">🎁 Подарить подарок</a>
-        <?php endif; ?>
+        <?php if ($me && (int)$me['id'] !== $id): ?><a class="btn" href="gifts.php?to=<?=$id?>">🎁 Подарить подарок</a><?php endif; ?>
     </div>
-
     <?php if (!$receivedGifts): ?>
         <p class="muted">Пока никто не подарил этому пользователю подарок.</p>
     <?php else: ?>
@@ -131,9 +123,8 @@ include __DIR__ . '/includes/header.php';
                     <div style="font-size:42px"><?=e($received['gift']['emoji'] ?? '🎁')?></div>
                     <b><?=e($received['gift']['name'] ?? 'Подарок')?></b>
                     <div class="muted" style="margin-top:6px">От <?=e($received['from'])?></div>
-                    <?php if ($received['time'] !== ''): ?>
-                        <div class="muted" style="font-size:12px;margin-top:4px"><?=e($received['time'])?></div>
-                    <?php endif; ?>
+                    <?php if ($received['description'] !== ''): ?><p style="margin:10px 0 0"><?=nl2br(e($received['description']))?></p><?php endif; ?>
+                    <?php if ($received['time'] !== ''): ?><div class="muted" style="font-size:12px;margin-top:4px"><?=e($received['time'])?></div><?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
