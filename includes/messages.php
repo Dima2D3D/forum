@@ -1,14 +1,171 @@
 <?php
-require_once __DIR__.'/../config.php';
-function message_key(): string { $path=DATA_DIR.'.messages.key';if(!is_file($path)){$key=random_bytes(32);@file_put_contents($path,$key,LOCK_EX);@chmod($path,0600);} $key=@file_get_contents($path);if(!is_string($key)||strlen($key)!==32)throw new RuntimeException('Ключ сообщений недоступен.');return $key; }
-function message_encrypt(string $text): string {$iv=random_bytes(12);$tag='';$cipher=openssl_encrypt($text,'aes-256-gcm',message_key(),OPENSSL_RAW_DATA,$iv,$tag);if($cipher===false)throw new RuntimeException('Не удалось зашифровать сообщение.');return base64_encode($iv.$tag.$cipher);}
-function message_decrypt(string $payload): string {$raw=base64_decode($payload,true);if($raw===false||strlen($raw)<29)return '[Сообщение повреждено]';$plain=openssl_decrypt(substr($raw,28),'aes-256-gcm',message_key(),OPENSSL_RAW_DATA,substr($raw,0,12),substr($raw,12,16));return $plain===false?'[Не удалось расшифровать сообщение]':$plain;}
-function conversation_id(int $a,int $b): string {$x=min($a,$b);$y=max($a,$b);return $x.'_'.$y;}
-function conversation_file(int $a,int $b): string{return 'messages_'.conversation_id($a,$b).'.json';}
-function conversation_rows(int $a,int $b): array{return data_load(conversation_file($a,$b));}
-function find_user_by_id(int $id): ?array{foreach(data_load('users.json') as $u)if((int)($u['id']??0)===$id)return $u;return null;}
-function find_user_by_handle(string $handle): ?array{$handle=strtolower(ltrim(trim($handle),'@'));foreach(data_load('users.json') as $u){$h=strtolower((string)($u['handle']??$u['username']??''));if($h===$handle)return $u;}return null;}
-function message_unread_count(int $uid): int{$n=0;foreach(glob(DATA_DIR.'messages_*.json')?:[] as $path){$rows=json_decode((string)@file_get_contents($path),true);if(!is_array($rows))continue;foreach($rows as $m)if((int)($m['to']??0)===$uid&&!empty($m['unread']))$n++;}return $n;}
-function mark_conversation_read(int $uid,int $other): void{$rows=conversation_rows($uid,$other);$changed=false;foreach($rows as &$m){if((int)($m['to']??0)===$uid&&!empty($m['unread'])){$m['unread']=false;$changed=true;}}unset($m);if($changed)data_save(conversation_file($uid,$other),$rows);}
-function send_private_message(int $from,int $to,string $text): void{if($from<=0||$to<=0||$from===$to)throw new RuntimeException('Некорректный получатель.');$text=clean_text($text,5000);if($text==='')throw new RuntimeException('Сообщение пустое.');$rows=conversation_rows($from,$to);$rows[]=['id'=>next_id($rows),'from'=>$from,'to'=>$to,'body'=>message_encrypt($text),'unread'=>true,'created_at'=>date('c')];data_save(conversation_file($from,$to),$rows);}
-function conversation_participants_for_admin(): array{$out=[];foreach(glob(DATA_DIR.'messages_*.json')?:[] as $path){if(preg_match('/messages_(\d+)_(\d+)\.json$/',basename($path),$m))$out[]=[(int)$m[1],(int)$m[2]];}return $out;}
+declare(strict_types=1);
+
+require_once __DIR__ . '/../config.php';
+
+function message_key(): string
+{
+    if (!extension_loaded('openssl')) {
+        throw new RuntimeException('Для личных сообщений требуется расширение OpenSSL.');
+    }
+
+    if (!is_dir(DATA_DIR) && !@mkdir(DATA_DIR, 0750, true)) {
+        throw new RuntimeException('Не удалось создать папку data.');
+    }
+
+    $path = DATA_DIR . '.messages.key';
+    $key = is_file($path) ? @file_get_contents($path) : false;
+
+    if (!is_string($key) || strlen($key) !== 32) {
+        $key = random_bytes(32);
+        $fp = @fopen($path, 'c+b');
+        if (!$fp) {
+            throw new RuntimeException('Не удалось создать ключ сообщений. Проверьте права на папку data.');
+        }
+        if (!flock($fp, LOCK_EX)) {
+            fclose($fp);
+            throw new RuntimeException('Не удалось заблокировать ключ сообщений.');
+        }
+        $existing = stream_get_contents($fp);
+        if (is_string($existing) && strlen($existing) === 32) {
+            $key = $existing;
+        } else {
+            ftruncate($fp, 0);
+            rewind($fp);
+            if (fwrite($fp, $key) !== 32) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                throw new RuntimeException('Не удалось записать ключ сообщений.');
+            }
+            fflush($fp);
+        }
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        @chmod($path, 0600);
+    }
+
+    return $key;
+}
+
+function message_encrypt(string $text): string
+{
+    $iv = random_bytes(12);
+    $tag = '';
+    $cipher = openssl_encrypt($text, 'aes-256-gcm', message_key(), OPENSSL_RAW_DATA, $iv, $tag);
+    if ($cipher === false || strlen($tag) !== 16) {
+        throw new RuntimeException('Не удалось зашифровать сообщение.');
+    }
+    return base64_encode($iv . $tag . $cipher);
+}
+
+function message_decrypt(string $payload): string
+{
+    $raw = base64_decode($payload, true);
+    if ($raw === false || strlen($raw) < 29) {
+        return '[Сообщение повреждено]';
+    }
+
+    $plain = openssl_decrypt(
+        substr($raw, 28),
+        'aes-256-gcm',
+        message_key(),
+        OPENSSL_RAW_DATA,
+        substr($raw, 0, 12),
+        substr($raw, 12, 16)
+    );
+
+    return $plain === false ? '[Не удалось расшифровать сообщение]' : $plain;
+}
+
+function conversation_id(int $a, int $b): string
+{
+    $x = min($a, $b);
+    $y = max($a, $b);
+    return $x . '_' . $y;
+}
+
+function conversation_file(int $a, int $b): string
+{
+    return 'messages_' . conversation_id($a, $b) . '.json';
+}
+
+function conversation_rows(int $a, int $b): array
+{
+    return data_load(conversation_file($a, $b));
+}
+
+function find_user_by_id(int $id): ?array
+{
+    foreach (data_load('users.json') as $u) {
+        if ((int)($u['id'] ?? 0) === $id) return $u;
+    }
+    return null;
+}
+
+function find_user_by_handle(string $handle): ?array
+{
+    $handle = strtolower(ltrim(trim($handle), '@'));
+    foreach (data_load('users.json') as $u) {
+        $h = strtolower((string)($u['handle'] ?? $u['username'] ?? ''));
+        if ($h === $handle) return $u;
+    }
+    return null;
+}
+
+function message_unread_count(int $uid): int
+{
+    $n = 0;
+    foreach (glob(DATA_DIR . 'messages_*.json') ?: [] as $path) {
+        $rows = json_decode((string)@file_get_contents($path), true);
+        if (!is_array($rows)) continue;
+        foreach ($rows as $m) {
+            if ((int)($m['to'] ?? 0) === $uid && !empty($m['unread'])) $n++;
+        }
+    }
+    return $n;
+}
+
+function mark_conversation_read(int $uid, int $other): void
+{
+    $rows = conversation_rows($uid, $other);
+    $changed = false;
+    foreach ($rows as &$m) {
+        if ((int)($m['to'] ?? 0) === $uid && !empty($m['unread'])) {
+            $m['unread'] = false;
+            $changed = true;
+        }
+    }
+    unset($m);
+    if ($changed) data_save(conversation_file($uid, $other), $rows);
+}
+
+function send_private_message(int $from, int $to, string $text): void
+{
+    if ($from <= 0 || $to <= 0 || $from === $to) {
+        throw new RuntimeException('Некорректный получатель.');
+    }
+    $text = clean_text($text, 5000);
+    if ($text === '') throw new RuntimeException('Сообщение пустое.');
+
+    $rows = conversation_rows($from, $to);
+    $rows[] = [
+        'id' => next_id($rows),
+        'from' => $from,
+        'to' => $to,
+        'body' => message_encrypt($text),
+        'unread' => true,
+        'created_at' => date('c')
+    ];
+    data_save(conversation_file($from, $to), $rows);
+}
+
+function conversation_participants_for_admin(): array
+{
+    $out = [];
+    foreach (glob(DATA_DIR . 'messages_*.json') ?: [] as $path) {
+        if (preg_match('/messages_(\d+)_(\d+)\.json$/', basename($path), $m)) {
+            $out[] = [(int)$m[1], (int)$m[2]];
+        }
+    }
+    return $out;
+}
