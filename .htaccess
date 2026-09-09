@@ -1,2 +1,9 @@
 DirectoryIndex index.php
 Options -Indexes
+RewriteEngine On
+
+# Красивые профили: /Dima2D3D вместо /profile.php?id=1.
+# Существующие файлы и папки не перехватываем.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([A-Za-z0-9_]{3,24})/?$ profile.php?handle=$1 [L,QSA]
