@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $html = '<h1>Код подтверждения входа</h1><p>Ваш код: <b style="font-size:30px">' . e($code) . '</b></p><p>Код действует 10 минут.</p>';
             if (send_html_mail((string)$found['email'], 'Код входа — GREFFRLEND', $html, 'Ваш код входа: ' . $code)) {
                 session_write_close();
-                header('Location: /2fa.php');
+                header('Location: 2fa (1).php', true, 303);
                 exit;
             }
             unset($_SESSION['2fa_pending'], $_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
@@ -43,8 +43,8 @@ $title = 'Вход — GREFFRLEND';
 include __DIR__ . '/includes/header.php';
 ?>
 <div class="card form" style="margin:70px auto;max-width:560px">
-<a class="logo" href="index.php">GREFFRLEND</a><h1>Вход</h1>
+<a class="logo" href="index.php">GREFFRLEND</a><h1>Вход TEST</h1>
 <?php if ($err): ?><div class="card danger"><?= e($err) ?></div><?php endif; ?>
-<form method="post"><input type="hidden" name="csrf" value="<?= e(csrf()) ?>"><label>E-mail или юзернейм</label><input type="text" name="email" autocomplete="username" value="<?= e($loginValue) ?>" placeholder="E-mail или @юзернейм" required><label>Пароль</label><input type="password" name="password" autocomplete="current-password" required><button class="btn" type="submit">Войти</button></form>
-<p><a href="register.php">Создать аккаунт</a></p></div>
+<form method="post"><input type="hidden" name="csrf" value="<?= e(csrf()) ?>"><label>E-mail или юзернейм</label><input type="text" name="email" autocomplete="username" value="<?= e($loginValue) ?>" placeholder="E-mail или @юзернейм" required><label>Пароль</label><input type="password" name="password" autocomplete="current-password" required><button class="btn" type="submit">Войти — TEST</button></form>
+<p><a href="login.php">Обычный вход</a></p></div>
 <?php include __DIR__ . '/includes/footer.php'; ?>
