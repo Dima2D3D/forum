@@ -33,7 +33,7 @@ function reply_children(array $replies, int $parentId): array
 function render_reply(array $reply, array $replies, ?array $me, int $threadId, int $level = 0): void
 {
     $replyId = (int)($reply['id'] ?? 0);
-    $replyLikes = data_load('likes_reply_' . $replyId . '.json');
+    $replyLikes = data_load('likes_reply_' . $threadId . '_' . $replyId . '.json');
     $level = min($level, 4);
     $isAuthor = $me && (int)($reply['author_id'] ?? 0) === (int)$me['id'];
     $canEdit = $me && ($isAuthor || is_owner($me));
@@ -152,8 +152,7 @@ $canManageThread = $me && is_owner($me);
                 <a href="<?= e($attachment) ?>" target="_blank" rel="noopener">
                     <img src="<?= e($attachment) ?>" alt="Вложение" loading="lazy">
                 </a>
-            <?php endforeach; ?>
-        </div>
+            </div>
     <?php endif; ?>
 
     <div class="reactions">
