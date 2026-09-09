@@ -2,8 +2,10 @@ DirectoryIndex index.php
 Options -Indexes -MultiViews
 RewriteEngine On
 
-# Канонические URL без .php в адресной строке.
-# Если пользователь открыл /thread.php?id=123 напрямую, отправляем его на /thread?id=123.
+# Канонические URL без .php в адресной строке только для обычных GET-запросов.
+# POST-запросы (лайки, формы и т.д.) нельзя редиректить, иначе браузер может
+# превратить POST в GET и AJAX перестанет получать JSON-ответ.
+RewriteCond %{REQUEST_METHOD} GET
 RewriteCond %{THE_REQUEST} \s/+(.+?)\.php(?:[?\s]) [NC]
 RewriteRule ^(.+)\.php$ /$1 [R=301,L,NE]
 
