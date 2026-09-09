@@ -65,8 +65,6 @@ function current_user(): ?array {
     $users = data_load('users.json');
     foreach ($users as $index => $u) {
         if ((int)($u['id'] ?? 0) !== (int)$_SESSION['uid']) continue;
-
-        // Не пишем файл на каждом запросе: обновляем активность максимум раз в 30 минут.
         if ((int)($_SESSION['activity_touch'] ?? 0) < time() - 1800) {
             $users[$index]['last_activity'] = date('c');
             $users[$index]['last_login'] = $users[$index]['last_login'] ?? null;
@@ -240,7 +238,12 @@ function send_html_mail(string $to, string $subject, string $html, string $text 
     ];
     $headerText = '';
     foreach ($headers as $key => $value) $headerText .= $key . ': ' . $value . "\r\n";
-    return @mail($to, $subject, $body, $headerText, '-f' . MAIL_FROM);
+
+    // Некоторые хостинги блокируют дополнительный параметр -f у mail().
+    // Сначала пробуем обычный вызов, затем безопасный fallback без -f.
+    $sent = @mail($to, $subject, $body, $headerText, '-f' . MAIL_FROM);
+    if ($sent) return true;
+    return @mail($to, $subject, $body, $headerText);
 }
 
 function mail_verification(string $email, string $username, string $url): bool {
