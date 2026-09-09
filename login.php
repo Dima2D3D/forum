@@ -15,7 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = strtolower(trim($_POST['email'] ?? ''));
         $pass = $_POST['password'] ?? '';
         $found = null;
-        foreach (data_load('users.json') as $x) {
+        $users = data_load('users.json');
+        foreach ($users as $x) {
             if (strtolower((string)($x['email'] ?? '')) === $email) {
                 $found = $x;
                 break;
@@ -33,20 +34,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!empty($found['two_factor_enabled'])) {
             $code = (string)random_int(100000, 999999);
             $_SESSION['2fa_uid'] = (int)$found['id'];
-            $_SESSION['2fa_code'] = $code;
+            $_SESSION['2fa_code_hash'] = password_hash($code, PASSWORD_DEFAULT);
             $_SESSION['2fa_expires'] = time() + 600;
-            $subject = 'Код входа — GREFFRLEND';
             $html = '<!doctype html><html><body style="margin:0;background:#090909;color:#eee;font-family:Arial,sans-serif"><div style="max-width:600px;margin:30px auto;background:#111;border:1px solid #292929;border-radius:18px;overflow:hidden"><div style="padding:28px;background:linear-gradient(110deg,#111,#2b1005,#390808);font-size:28px;font-weight:900;letter-spacing:4px;color:#ff6b00">GREFFRLEND</div><div style="padding:32px"><h1>Код подтверждения входа</h1><p>Ваш одноразовый код:</p><div style="font-size:38px;letter-spacing:10px;font-weight:900;color:#ff6b00">' . e($code) . '</div><p style="color:#999">Код действует 10 минут. Если это были не вы, просто проигнорируйте письмо.</p></div><div style="padding:18px 32px;border-top:1px solid #222;color:#777">© 2025 — 2026 GREFFRLEND</div></div></body></html>';
-            $headers = "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nFrom: GREFFRLEND <" . MAIL_FROM . ">\r\nReply-To: " . MAIL_FROM . "\r\n";
-            if (!@mail($found['email'], $subject, $html, $headers)) {
-                unset($_SESSION['2fa_uid'], $_SESSION['2fa_code'], $_SESSION['2fa_expires']);
+            if (!send_html_mail((string)$found['email'], 'Код входа — GREFFRLEND', $html, "Ваш код входа: $code. Код действует 10 минут.")) {
+                unset($_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
                 $err = 'Не удалось отправить код. Проверьте настройки почты на хостинге.';
             } else {
                 header('Location: 2fa.php');
                 exit;
             }
         } else {
+            foreach ($users as &$item) {
+                if ((int)($item['id'] ?? 0) === (int)$found['id']) {
+                    $item['last_login'] = date('c');
+                    $item['last_activity'] = date('c');
+                    break;
+                }
+            }
+            unset($item);
+            data_save('users.json', $users);
             $_SESSION['uid'] = (int)$found['id'];
+            $_SESSION['activity_touch'] = time();
             header('Location: index.php');
             exit;
         }
