@@ -1,11 +1,14 @@
 <?php
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/includes/social.php';
+require_once __DIR__ . '/includes/economy.php';
 
 $u = require_login();
 $categories = data_load('categories.json');
 $categoryId = (int)($_GET['category'] ?? 0);
 $error = '';
+$premiumUser = premium($u) || is_owner($u);
+$premiumStyles = ['default'=>'Обычный','glow'=>'Premium Glow','glass'=>'Glass','accent'=>'Accent'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
@@ -19,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($categories as $category) {
             if ((int)($category['id'] ?? 0) === $categoryId) $validCategory = true;
         }
+        $premiumStyle = (string)($_POST['premium_style'] ?? 'default');
+        if (!$premiumUser || !array_key_exists($premiumStyle, $premiumStyles)) $premiumStyle = 'default';
 
         if (!$validCategory) $error = 'Выберите существующую тему форума.';
         elseif (mb_strlen($title) < 3 || mb_strlen($content) < 3) $error = 'Заполните заголовок и текст.';
@@ -35,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'author_id' => (int)$u['id'],
                 'attachments' => $attachments,
                 'pinned' => false,
+                'premium_style' => $premiumStyle,
                 'created_at' => date('c')
             ];
             data_save('threads.json', $threads);
@@ -71,6 +77,15 @@ include __DIR__ . '/includes/header.php';
             <?php endforeach; ?>
         </div>
         <textarea id="post-content" name="content" maxlength="20000" required></textarea>
+        <?php if ($premiumUser): ?>
+            <label>✨ Оформление поста</label>
+            <select name="premium_style">
+                <?php foreach ($premiumStyles as $value => $label): ?>
+                    <option value="<?= e($value) ?>"><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <div class="muted" style="margin-top:6px">Обычный стиль остаётся доступен всегда. Остальные — только для Premium.</div>
+        <?php endif; ?>
         <label>Фотографии и GIF — до <?= MAX_ATTACHMENTS ?> файлов, каждый до <?= (int)(MAX_UPLOAD_BYTES / 1024 / 1024) ?> МБ</label>
         <input type="file" name="attachments[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
         <button class="btn" type="submit">Опубликовать</button>
