@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config.php';
 if (is_file(__DIR__ . '/social.php')) require_once __DIR__ . '/social.php';
 if (is_file(__DIR__ . '/inactivity.php')) require_once __DIR__ . '/inactivity.php';
+if (is_file(__DIR__ . '/analytics.php')) require_once __DIR__ . '/analytics.php';
 $me = current_user();
 run_inactivity_reminders();
 $pageTitle = isset($title) && $title !== '' ? $title : SITE_NAME;
