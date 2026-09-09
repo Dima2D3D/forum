@@ -12,18 +12,8 @@ if($handle===''&&$profileHandle!==''){header('Location: '.SITE_URL.'/'.rawurlenc
 $me=current_user();$privacy=$profile['privacy']??['email'=>'nobody','phone'=>'nobody','description'=>'everyone'];
 $canSeeDescription=($privacy['description']??'everyone')==='everyone'||(($privacy['description']??'')==='members'&&$me)||($me&&(int)$me['id']===$id);
 $canSeeEmail=$me&&((int)$me['id']===$id||($privacy['email']??'nobody')==='everyone');$canSeePhone=$me&&((int)$me['id']===$id||($privacy['phone']??'nobody')==='everyone');$premium=subscription($profile)!==null||is_owner($profile);$title=($profile['username']??'Профиль').' — GREFFRLEND';
-
-$accent=(string)($profile['premium_accent']??'#ff6817');
-if(!preg_match('/^#[0-9a-fA-F]{6}$/',$accent))$accent='#ff6817';
-$status=trim((string)($profile['premium_status']??''));
-$frame=(string)($profile['premium_frame']??'glow');
-$frameStyle=$premium&&$frame==='soft'?'box-shadow:0 0 28px color-mix(in srgb, '.$accent.' 25%, transparent);':($premium?'box-shadow:0 0 36px color-mix(in srgb, '.$accent.' 45%, transparent);':'');
-
-$threads=data_load('threads.json');$latestPosts=[];
-foreach($threads as $thread){if((int)($thread['author_id']??0)!==$id)continue;$latestPosts[]=$thread;}
-usort($latestPosts,static function(array $a,array $b):int{return (strtotime((string)($b['created_at']??''))?:0)<=>(strtotime((string)($a['created_at']??''))?:0);});
-$latestPosts=array_slice($latestPosts,0,5);
-
+$accent=(string)($profile['premium_accent']??'#ff6817');if(!preg_match('/^#[0-9a-fA-F]{6}$/',$accent))$accent='#ff6817';$status=trim((string)($profile['premium_status']??''));$frame=(string)($profile['premium_frame']??'glow');$frameStyle=$premium&&$frame==='soft'?'box-shadow:0 0 28px color-mix(in srgb, '.$accent.' 25%, transparent);':($premium?'box-shadow:0 0 36px color-mix(in srgb, '.$accent.' 45%, transparent);':'');
+$threads=data_load('threads.json');$latestPosts=[];foreach($threads as $thread)if((int)($thread['author_id']??0)===$id)$latestPosts[]=$thread;usort($latestPosts,static function(array $a,array $b):int{return (strtotime((string)($b['created_at']??''))?:0)<=>(strtotime((string)($a['created_at']??''))?:0);});$latestPosts=array_slice($latestPosts,0,5);
 $giftMap=[];foreach(gifts() as $gift)$giftMap[(int)$gift['id']=$gift;$receivedGifts=[];foreach(data_load('gift_logs.json') as $giftLog){if((int)($giftLog['to']??0)!==$id)continue;$giftId=(int)($giftLog['gift_id']??0);if(!isset($giftMap[$giftId]))continue;$fromName='Пользователь';$fromId=(int)($giftLog['from']??0);foreach($users as $giftUser)if((int)($giftUser['id']??0)===$fromId){$fromName=(string)$giftUser['username'];break;}$receivedGifts[]=['gift'=>$giftMap[$giftId],'from'=>$fromName,'description'=>(string)($giftLog['description']??''),'time'=>(string)($giftLog['time']??'')];}$receivedGifts=array_reverse($receivedGifts);
 include __DIR__ . '/includes/header.php';
 ?>
