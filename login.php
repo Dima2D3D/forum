@@ -43,6 +43,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!empty($found['two_factor_enabled'])) {
             try {
                 $code = (string)random_int(100000, 999999);
+
+                // Создаём новую сессию перед созданием pending-авторизации.
+                // Это не даёт старой сессии перетянуть uid и одновременно
+                // гарантирует, что данные 2FA относятся к текущему входу.
+                session_regenerate_id(true);
+
+                $_SESSION['2fa_pending'] = true;
                 $_SESSION['2fa_uid'] = (int)$found['id'];
                 $_SESSION['2fa_code_hash'] = password_hash($code, PASSWORD_DEFAULT);
                 $_SESSION['2fa_expires'] = time() + 600;
@@ -50,14 +57,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $html = '<!doctype html><html><body style="margin:0;background:#090909;color:#eee;font-family:Arial,sans-serif"><div style="max-width:600px;margin:30px auto;background:#111;border:1px solid #292929;border-radius:18px;overflow:hidden"><div style="padding:28px;background:linear-gradient(110deg,#111,#2b1005,#390808);font-size:28px;font-weight:900;letter-spacing:4px;color:#ff6b00">GREFFRLEND</div><div style="padding:32px"><h1>Код подтверждения входа</h1><p>Ваш одноразовый код:</p><div style="font-size:38px;letter-spacing:10px;font-weight:900;color:#ff6b00">' . e($code) . '</div><p style="color:#999">Код действует 10 минут. Если это были не вы, просто проигнорируйте письмо.</p></div><div style="padding:18px 32px;border-top:1px solid #222;color:#777">© 2025 — 2026 GREFFRLEND</div></div></body></html>';
 
                 if (!send_html_mail((string)$found['email'], 'Код входа — GREFFRLEND', $html, "Ваш код входа: $code. Код действует 10 минут.")) {
-                    unset($_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
+                    unset($_SESSION['2fa_pending'], $_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
                     $err = 'Не удалось отправить код 2FA. Попробуйте позже или отключите 2FA в настройках профиля.';
                 } else {
-                    header('Location: 2fa.php');
+                    // Принудительно записываем pending-состояние до redirect.
+                    session_write_close();
+                    header('Location: 2fa.php', true, 303);
                     exit;
                 }
             } catch (Throwable $e) {
-                unset($_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
+                unset($_SESSION['2fa_pending'], $_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
                 $err = 'Не удалось подготовить код входа. Попробуйте ещё раз.';
             }
         } else {
