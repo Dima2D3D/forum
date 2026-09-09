@@ -76,39 +76,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             data_save('users.json', $users);
 
-            // Основной способ — готовая почтовая функция форума.
-            $sent = mail_verification($email, $name, $link);
+            $subject = 'Подтверждение E-mail - GREFFRLEND';
+            $safeName = e($name);
+            $safeLink = e($link);
+            $html = '<!doctype html><html lang="ru"><body style="font-family:Arial,sans-serif;background:#090909;color:#eee;padding:30px"><div style="max-width:600px;margin:auto;background:#111;padding:30px;border-radius:15px"><h1 style="color:#ff6b00">GREFFRLEND</h1><p>Привет, ' . $safeName . '!</p><p>Подтвердите E-mail, чтобы завершить регистрацию.</p><p><a href="' . $safeLink . '" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:bold">Подтвердить E-mail</a></p><p>Если кнопка не работает, откройте ссылку:</p><p>' . $safeLink . '</p></div></body></html>';
+            $plain = "Привет, $name!\n\nПодтвердите E-mail по ссылке:\n$link";
+            $boundary = '=_greffrlend_register_' . bin2hex(random_bytes(8));
 
-            // Простой fallback для хостингов, где multipart/alternative
-            // или параметр -f блокируется почтовым сервером.
+            // Кодируем обе части base64 и разбиваем на строки по 76 символов.
+            // Это устраняет ошибку Exim: "содержит слишком длинные строки".
+            $body = '--' . $boundary . "\r\n"
+                . "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($plain), 76, "\r\n")
+                . "\r\n--" . $boundary . "\r\n"
+                . "Content-Type: text/html; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($html), 76, "\r\n")
+                . '--' . $boundary . "--\r\n";
+
+            $headers = "MIME-Version: 1.0\r\n"
+                . 'Content-Type: multipart/alternative; boundary="' . $boundary . "\"\r\n"
+                . 'From: GREFFRLEND <' . MAIL_FROM . ">\r\n"
+                . 'Reply-To: ' . MAIL_FROM . "\r\n"
+                . 'X-Mailer: GREFFRLEND PHP/' . PHP_VERSION . "\r\n";
+
+            $sent = @mail($email, $subject, $body, $headers, '-f' . MAIL_FROM);
             if (!$sent) {
-                $subject = 'Подтверждение E-mail — GREFFRLEND';
-                $safeName = e($name);
-                $safeLink = e($link);
-                $html = '<!doctype html><html lang="ru"><body style="font-family:Arial,sans-serif;background:#090909;color:#eee;padding:30px">'
-                    . '<div style="max-width:600px;margin:auto;background:#111;padding:30px;border-radius:15px">'
-                    . '<h1 style="color:#ff6b00">GREFFRLEND</h1>'
-                    . '<p>Привет, ' . $safeName . '!</p>'
-                    . '<p>Подтвердите E-mail, чтобы завершить регистрацию.</p>'
-                    . '<p><a href="' . $safeLink . '" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:bold">Подтвердить E-mail</a></p>'
-                    . '<p>Если кнопка не работает, откройте ссылку:</p><p>' . $safeLink . '</p>'
-                    . '</div></body></html>';
-                $plain = "Привет, $name!\n\nПодтвердите E-mail: $link";
-                $headers = "MIME-Version: 1.0\r\n"
-                    . "Content-Type: multipart/alternative; boundary=greffrlend_register\r\n"
-                    . "From: GREFFRLEND <" . MAIL_FROM . ">\r\n"
-                    . "Reply-To: " . MAIL_FROM . "\r\n"
-                    . "X-Mailer: GREFFRLEND\r\n";
-                $body = "--greffrlend_register\r\n"
-                    . "Content-Type: text/plain; charset=UTF-8\r\n"
-                    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
-                    . $plain . "\r\n\r\n"
-                    . "--greffrlend_register\r\n"
-                    . "Content-Type: text/html; charset=UTF-8\r\n"
-                    . "Content-Transfer-Encoding: 8bit\r\n\r\n"
-                    . $html . "\r\n\r\n"
-                    . "--greffrlend_register--\r\n";
-
                 $sent = @mail($email, $subject, $body, $headers);
             }
 
