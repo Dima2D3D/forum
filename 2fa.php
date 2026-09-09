@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/config.php';
 
-if (empty($_SESSION['2fa_uid']) || empty($_SESSION['2fa_code']) || empty($_SESSION['2fa_expires'])) {
+if (empty($_SESSION['2fa_uid']) || empty($_SESSION['2fa_code_hash']) || empty($_SESSION['2fa_expires'])) {
     header('Location: login.php');
     exit;
 }
@@ -12,12 +12,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = preg_replace('/\D/', '', (string)($_POST['code'] ?? ''));
     if (time() > (int)$_SESSION['2fa_expires']) {
         $error = 'Код истёк. Войдите заново.';
-        unset($_SESSION['2fa_uid'], $_SESSION['2fa_code'], $_SESSION['2fa_expires']);
-    } elseif (!hash_equals((string)$_SESSION['2fa_code'], $code)) {
+        unset($_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
+    } elseif (!password_verify($code, (string)$_SESSION['2fa_code_hash'])) {
         $error = 'Неверный код подтверждения.';
     } else {
-        $_SESSION['uid'] = (int)$_SESSION['2fa_uid'];
-        unset($_SESSION['2fa_uid'], $_SESSION['2fa_code'], $_SESSION['2fa_expires']);
+        $uid = (int)$_SESSION['2fa_uid'];
+        $users = data_load('users.json');
+        foreach ($users as &$item) {
+            if ((int)($item['id'] ?? 0) === $uid) {
+                $item['last_login'] = date('c');
+                $item['last_activity'] = date('c');
+                break;
+            }
+        }
+        unset($item);
+        data_save('users.json', $users);
+        $_SESSION['uid'] = $uid;
+        $_SESSION['activity_touch'] = time();
+        unset($_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
         header('Location: index.php');
         exit;
     }
