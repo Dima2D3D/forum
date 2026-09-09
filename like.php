@@ -41,33 +41,35 @@ if ($type === 'thread') {
     }
     $file = 'likes_thread_' . $id . '.json';
 } else {
-    $replyFile = null;
-    foreach (glob(DATA_DIR . 'replies_*.json') ?: [] as $path) {
-        $rows = json_decode((string)@file_get_contents($path), true);
-        if (!is_array($rows)) continue;
+    // ID комментариев начинаются заново в каждой теме, поэтому thread_id
+    // передаём из формы и используем его для точного поиска комментария.
+    $threadId = (int)($_POST['thread_id'] ?? 0);
+    if ($threadId < 1) {
+        http_response_code(400);
+        exit('Не указана тема комментария.');
+    }
 
-        $name = basename($path);
-        if (!preg_match('/^replies_(\d+)\.json$/', $name, $m)) continue;
-        $candidateThreadId = (int)$m[1];
-
-        foreach ($rows as $reply) {
-            if ((int)($reply['id'] ?? 0) === $id) {
-                $replyFile = $name;
-                $threadId = $candidateThreadId;
-                $targetUserId = (int)($reply['author_id'] ?? 0);
-                break 2;
-            }
+    $replyFile = 'replies_' . $threadId . '.json';
+    $rows = data_load($replyFile);
+    $reply = null;
+    foreach ($rows as $item) {
+        if ((int)($item['id'] ?? 0) === $id) {
+            $reply = $item;
+            break;
         }
     }
 
-    if (!$replyFile || $threadId <= 0 || $targetUserId <= 0) {
+    if (!$reply) {
         http_response_code(404);
         exit('Комментарий не найден.');
     }
 
-    // ID комментариев начинаются заново в каждой теме, поэтому thread_id
-    // обязательно входит в имя файла лайков. Иначе комментарий #1 одной
-    // темы наследовал лайки комментария #1 другой темы.
+    $targetUserId = (int)($reply['author_id'] ?? 0);
+    if ($targetUserId <= 0) {
+        http_response_code(404);
+        exit('Автор комментария не найден.');
+    }
+
     $file = 'likes_reply_' . $threadId . '_' . $id . '.json';
     $redirect = 'thread.php?id=' . $threadId;
 }
@@ -98,5 +100,17 @@ if ($position === false) {
 
 data_save($file, $normalized);
 check_achievements($targetUserId);
+
+// Для AJAX-запросов не перезагружаем и не уводим пользователя со страницы.
+if (isset($_POST['ajax']) && $_POST['ajax'] === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => true,
+        'liked' => $position === false,
+        'count' => count($normalized)
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 header('Location: ' . $redirect . '#post-' . $id);
 exit;
