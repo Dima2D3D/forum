@@ -114,22 +114,35 @@ function user_reply_count(int $id): int {
 
 function user_received_like_count(int $id): int {
     $n = 0;
+
     foreach (glob(DATA_DIR . 'likes_thread_*.json') ?: [] as $path) {
-        $threadId = (int)preg_replace('/\D/', '', basename($path));
+        $name = basename($path);
+        if (!preg_match('/^likes_thread_(\d+)\.json$/', $name, $m)) continue;
+        $threadId = (int)$m[1];
+
         foreach (data_load('threads.json') as $t) {
-            if ((int)($t['id'] ?? 0) === $threadId && (int)($t['author_id'] ?? 0) === $id) $n += count(data_load(basename($path)));
-        }
-    }
-    foreach (glob(DATA_DIR . 'likes_reply_*.json') ?: [] as $path) {
-        $replyId = (int)preg_replace('/\D/', '', basename($path));
-        foreach (glob(DATA_DIR . 'replies_*.json') ?: [] as $replyPath) {
-            $rows = json_decode((string)@file_get_contents($replyPath), true);
-            if (!is_array($rows)) continue;
-            foreach ($rows as $r) {
-                if ((int)($r['id'] ?? 0) === $replyId && (int)($r['author_id'] ?? 0) === $id) $n += count(data_load(basename($path)));
+            if ((int)($t['id'] ?? 0) === $threadId && (int)($t['author_id'] ?? 0) === $id) {
+                $n += count(data_load($name));
+                break;
             }
         }
     }
+
+    foreach (glob(DATA_DIR . 'likes_reply_*.json') ?: [] as $path) {
+        $name = basename($path);
+        if (!preg_match('/^likes_reply_(\d+)_(\d+)\.json$/', $name, $m)) continue;
+        $threadId = (int)$m[1];
+        $replyId = (int)$m[2];
+
+        $rows = data_load('replies_' . $threadId . '.json');
+        foreach ($rows as $r) {
+            if ((int)($r['id'] ?? 0) === $replyId && (int)($r['author_id'] ?? 0) === $id) {
+                $n += count(data_load($name));
+                break;
+            }
+        }
+    }
+
     return $n;
 }
 
