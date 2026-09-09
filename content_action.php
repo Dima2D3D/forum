@@ -26,7 +26,13 @@ check_csrf();
 
 $type   = trim((string)($_POST['type'] ?? ''));
 $action = trim((string)($_POST['action'] ?? ''));
-$id     = (int)($_POST['id'] ?? 0);
+
+/*
+ * Для поста идентификатор приходит в поле id.
+ * Для комментария форма использует reply_id, поэтому нельзя
+ * проверять только $_POST['id'] до определения типа содержимого.
+ */
+$id = (int)($_POST['id'] ?? $_POST['reply_id'] ?? 0);
 
 if ($id < 1) {
     http_response_code(400);
