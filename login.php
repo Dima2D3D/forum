@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$found || !password_verify($pass, (string)($found['password_hash'] ?? ''))) {
             $err = 'Неверный E-mail/юзернейм или пароль.';
-        } elseif (empty($found['email_verified'])) {
+        } elseif (filter_var($found['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN) !== true && (int)($found['email_verified'] ?? 0) !== 1) {
             $err = 'Сначала подтвердите E-mail. Проверьте почту, включая папку «Спам».';
         } elseif (!empty($found['ban']['active'])) {
             session_regenerate_id(true);
@@ -43,12 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!empty($found['two_factor_enabled'])) {
             try {
                 $code = (string)random_int(100000, 999999);
-
-                // Создаём новую сессию перед созданием pending-авторизации.
-                // Это не даёт старой сессии перетянуть uid и одновременно
-                // гарантирует, что данные 2FA относятся к текущему входу.
                 session_regenerate_id(true);
-
                 $_SESSION['2fa_pending'] = true;
                 $_SESSION['2fa_uid'] = (int)$found['id'];
                 $_SESSION['2fa_code_hash'] = password_hash($code, PASSWORD_DEFAULT);
@@ -60,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     unset($_SESSION['2fa_pending'], $_SESSION['2fa_uid'], $_SESSION['2fa_code_hash'], $_SESSION['2fa_expires']);
                     $err = 'Не удалось отправить код 2FA. Попробуйте позже или отключите 2FA в настройках профиля.';
                 } else {
-                    // Принудительно записываем pending-состояние до redirect.
                     session_write_close();
                     header('Location: 2fa.php', true, 303);
                     exit;
@@ -82,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 unset($item);
                 data_save('users.json', $users);
             } catch (Throwable $e) {
-                // Ошибка записи статистики входа не должна блокировать авторизацию.
             }
 
             session_regenerate_id(true);
@@ -109,6 +102,7 @@ include __DIR__ . '/includes/header.php';
         <input type="password" name="password" autocomplete="current-password" required>
         <button class="btn" type="submit">Войти</button>
     </form>
+    <p><a href="forgot-password.php">Забыли пароль?</a></p>
     <p><a href="register.php">Создать аккаунт</a></p>
 </div>
 <?php include __DIR__ . '/includes/footer.php'; ?>
