@@ -45,7 +45,6 @@ function current_user(): ?array {
     $users = data_load('users.json');
     foreach ($users as $index => $u) {
         if ((int)($u['id'] ?? 0) !== (int)$_SESSION['uid']) continue;
-        /* Обновляем присутствие раз в минуту, чтобы профиль и админ-статистика совпадали. */
         if ((int)($_SESSION['activity_touch'] ?? 0) < time() - 60) {
             $users[$index]['last_activity'] = date('c');
             $users[$index]['last_login'] = $users[$index]['last_login'] ?? null;
@@ -83,6 +82,35 @@ function profile_description(string $text, bool $owner = false): string { $text=
 function allowed_upload(string $tmp,string $name): bool { if(!is_uploaded_file($tmp)||!is_file($tmp)||filesize($tmp)>MAX_UPLOAD_BYTES)return false;$mime=(new finfo(FILEINFO_MIME_TYPE))->file($tmp);return in_array($mime,['image/jpeg','image/png','image/gif','image/webp'],true); }
 function save_single_upload(string $field): ?string { if(empty($_FILES[$field]['tmp_name'])||!is_string($_FILES[$field]['tmp_name']))return null;$tmp=$_FILES[$field]['tmp_name'];$name=(string)($_FILES[$field]['name']??'');if(!allowed_upload($tmp,$name))return null;$mime=(new finfo(FILEINFO_MIME_TYPE))->file($tmp);$ext=['image/jpeg'=>'jpg','image/png'=>'png','image/gif'=>'gif','image/webp'=>'webp'][$mime]??null;if(!$ext)return null;$file=bin2hex(random_bytes(16)).'.'.$ext;return move_uploaded_file($tmp,UPLOAD_DIR.$file)?'uploads/'.$file:null; }
 function save_uploads(string $field='attachments'): array { if(empty($_FILES[$field]['name'])||!is_array($_FILES[$field]['name']))return []; $saved=[];$count=min(count($_FILES[$field]['name']),MAX_ATTACHMENTS);for($i=0;$i<$count;$i++){ $tmp=$_FILES[$field]['tmp_name'][$i]??'';$name=$_FILES[$field]['name'][$i]??'';if(!allowed_upload($tmp,$name))continue;$mime=(new finfo(FILEINFO_MIME_TYPE))->file($tmp);$ext=['image/jpeg'=>'jpg','image/png'=>'png','image/gif'=>'gif','image/webp'=>'webp'][$mime]??null;if(!$ext)continue;$file=bin2hex(random_bytes(16)).'.'.$ext;if(move_uploaded_file($tmp,UPLOAD_DIR.$file))$saved[]='uploads/'.$file;}return $saved; }
-function send_html_mail(string $to,string $subject,string $html,string $text=''): bool { $boundary='=_greffrlend_'.bin2hex(random_bytes(8));$text=$text!==''?$text:trim(strip_tags(preg_replace('/<br\s*\/?>/i',"\n",$html)??$html));$body='--'.$boundary."\r\n".'Content-Type: text/plain; charset=UTF-8' ."\r\nContent-Transfer-Encoding: 8bit\r\n\r\n".wordwrap($text,70,"\r\n")."\r\n\r\n".'--'.$boundary."\r\n".'Content-Type: text/html; charset=UTF-8' ."\r\nContent-Transfer-Encoding: 8bit\r\n\r\n".$html."\r\n\r\n--".$boundary."--\r\n";$headers=['MIME-Version'=>'1.0','Content-Type'=>'multipart/alternative; boundary="'.$boundary.'"','From'=>'GREFFRLEND <'.MAIL_FROM.'>','Reply-To'=>MAIL_FROM,'X-Mailer'=>'GREFFRLEND PHP/'.PHP_VERSION];$headerText='';foreach($headers as $key=>$value)$headerText.=$key.': '.$value."\r\n";$sent=@mail($to,$subject,$body,$headerText,'-f'.MAIL_FROM);if($sent)return true;return @mail($to,$subject,$body,$headerText); }
-function mail_verification(string $email,string $username,string $url): bool { $html='<!doctype html><html><body style="margin:0;background:#090909;color:#eee;font-family:Arial,sans-serif"><div style="max-width:620px;margin:30px auto;background:#111;border:1px solid #2c2c2c;border-radius:18px;overflow:hidden"><div style="padding:30px;background:linear-gradient(110deg,#111,#2a1005,#3a0808)"><div style="font-size:28px;font-weight:900;letter-spacing:4px;color:#ff6b00">GREFFRLEND</div></div><div style="padding:32px"><h1>Подтвердите E-mail</h1><p>Привет, '.e($username).'!</p><p>Нажмите кнопку ниже, чтобы подтвердить адрес электронной почты и завершить регистрацию.</p><p><a href="'.e($url).'" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:700">Подтвердить E-mail</a></p><p style="color:#999;font-size:13px">Если кнопка не работает, скопируйте ссылку:<br><a href="'.e($url).'" style="color:#ff7a2b">'.e($url).'</a></p></div><div style="padding:18px 32px;color:#777;border-top:1px solid #222">© 2025 — 2026 GREFFRLEND</div></div></body></html>';return send_html_mail($email,'Подтверждение E-mail — GREFFRLEND',$html,"Привет, $username! Подтвердите E-mail: $url"); }
+
+function send_html_mail(string $to,string $subject,string $html,string $text=''): bool {
+    $boundary='=_greffrlend_'.bin2hex(random_bytes(12));
+    $text=$text!==''?$text:trim(strip_tags(preg_replace('/<br\s*\/?>/i',"\n",$html)??$html));
+    $body='--'.$boundary."\r\n"
+        .'Content-Type: text/plain; charset=UTF-8' ."\r\n"
+        .'Content-Transfer-Encoding: base64' ."\r\n\r\n"
+        .chunk_split(base64_encode($text),76,"\r\n")
+        .'--'.$boundary."\r\n"
+        .'Content-Type: text/html; charset=UTF-8' ."\r\n"
+        .'Content-Transfer-Encoding: base64' ."\r\n\r\n"
+        .chunk_split(base64_encode($html),76,"\r\n")
+        .'--'.$boundary."--\r\n";
+    $messageId = '<' . bin2hex(random_bytes(16)) . '@greffrlend.fun>';
+    $headers='MIME-Version: 1.0' ."\r\n"
+        .'Content-Type: multipart/alternative; boundary="'.$boundary.'"' ."\r\n"
+        .'From: GREFFRLEND <'.MAIL_FROM.'>' ."\r\n"
+        .'Reply-To: '.MAIL_FROM ."\r\n"
+        .'Date: '.date(DATE_RFC2822) ."\r\n"
+        .'Message-ID: '.$messageId ."\r\n"
+        .'X-Mailer: GREFFRLEND PHP/'.PHP_VERSION ."\r\n";
+    $sent=@mail($to,$subject,$body,$headers,'-f'.MAIL_FROM);
+    if($sent)return true;
+    return @mail($to,$subject,$body,$headers);
+}
+
+function mail_verification(string $email,string $username,string $url): bool {
+    $html='<!doctype html><html><body style="margin:0;background:#090909;color:#eee;font-family:Arial,sans-serif"><div style="max-width:620px;margin:30px auto;background:#111;border:1px solid #2c2c2c;border-radius:18px;overflow:hidden"><div style="padding:30px;background:linear-gradient(110deg,#111,#2a1005,#3a0808)"><div style="font-size:28px;font-weight:900;letter-spacing:4px;color:#ff6b00">GREFFRLEND</div></div><div style="padding:32px"><h1>Подтвердите E-mail</h1><p>Привет, '.e($username).'!</p><p>Нажмите кнопку ниже, чтобы подтвердить адрес электронной почты и завершить регистрацию.</p><p><a href="'.e($url).'" style="display:inline-block;padding:14px 22px;background:#f35b12;color:#fff;text-decoration:none;border-radius:9px;font-weight:700">Подтвердить E-mail</a></p><p style="color:#999;font-size:13px">Если кнопка не работает, скопируйте ссылку:<br><a href="'.e($url).'" style="color:#ff7a2b">'.e($url).'</a></p></div><div style="padding:18px 32px;color:#777;border-top:1px solid #222">© 2025 — 2026 GREFFRLEND</div></div></body></html>';
+    return send_html_mail($email,'Подтверждение E-mail — GREFFRLEND',$html,"Привет, $username!\n\nПодтвердите E-mail: $url");
+}
+
 if(($ban=banned_user())&&basename($_SERVER['SCRIPT_NAME']??'')!=='banned.php'){header('Location: banned.php');exit;}
